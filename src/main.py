@@ -1,6 +1,5 @@
-from telas.telaprincipal import TelaPrincipal
+from telas.telaprincipal import iniciar_app
+
 
 if __name__ == "__main__":
-    TelaPrincipal()
-
-
+    iniciar_app()
