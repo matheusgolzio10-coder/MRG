@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from telas.spearmankarber import calcular_daphnia_e_gerar_relatorio
 
 class Daphnia(ctk.CTkToplevel):
     def __init__(self, data, numero, tipo):
@@ -79,4 +80,50 @@ class Daphnia(ctk.CTkToplevel):
         self.calcular_button.grid(row=4, column=2, padx=10, pady=10, sticky="e")
 
     def calcular(self):
-        print("Calcular")
+        concentracoes = [0]
+        for linha in self.amostra_conc.get("1.0", "end").split("\n"):
+            if linha:
+                linha = float(linha.replace(",", "."))
+                concentracoes.append(linha)
+
+        totais = []
+        totais.append(float(self.controle_total.get("1.0", "1.2")))
+        for linha in self.amostra_total.get("1.0", "end").split("\n"):
+            if linha:
+                linha = float(linha.replace(",", "."))
+                totais.append(linha)
+
+        tuplas_mortos = []
+        for linha in self.controle_mortos.get("1.0", "end").split("\n"):
+            if linha:
+                valores = linha.split('\t')
+                tuplas_mortos.append(tuple(valores))
+
+        for linha in self.amostra_mortos.get("1.0", "end").split("\n"):
+            if linha:
+                valores = linha.split('\t')
+                tuplas_mortos.append(tuple(valores))
+
+        mortos = []
+        for k in tuplas_mortos:
+            mortos.append(float(k[0]) + float(k[1]))
+
+        self.resultado_tela = ctk.CTkToplevel()
+        self.resultado_tela.grab_set()
+
+        self.resultado_tela.title("Resultado")
+
+        self.resultado_tela.geometry("600x500")
+
+        self.textbox_resultado = ctk.CTkTextbox(self.resultado_tela, fg_color="grey", corner_radius=0)
+        self.textbox_resultado.pack(fill="both", expand=True)
+
+        self.textbox_resultado.insert("1.0", calcular_daphnia_e_gerar_relatorio(
+                    concentracoes, totais, mortos, 
+                    data=self.data, 
+                    num_teste=self.numero,
+                    un=self.unidade.get()
+                ))
+        
+        self.textbox_resultado.configure(state="disabled")
+
