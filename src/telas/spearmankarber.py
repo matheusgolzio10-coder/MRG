@@ -9,13 +9,13 @@ def calcular_daphnia_e_gerar_relatorio(
     un,
     num_teste, 
     duracao=48, 
-    especie="Daphnia similis",
+    especie="D.similis",
     trim=0.0, 
     alfa=0.05,
 ):
     """
-    Calcula a EC50 via Spearman-Karber (Trim 0%) e formata o resultado
-    no modelo padrão de relatório impresso.
+    Calcula a EC50 via Spearman-Karber Clássico (USEPA / Trim 0%) 
+    e gera o relatório formatado com alinhamento visual preciso.
     """
     conc = np.array(concentracoes, dtype=float)
     tot = np.array(totais, dtype=float)
@@ -32,7 +32,7 @@ def calcular_daphnia_e_gerar_relatorio(
     if mortalidade_controle > 0.10:
         return f"ERRO: Ensaio Inválido. Mortalidade no controle ({mortalidade_controle*100:.1f}%) excedeu 10%."
 
-    # Separa os dados de teste (exclui o controle)
+    # Separa apenas as concentrações expostas (> 0) para evitar log(0)
     mask = conc > 0
     c_exp = conc[mask]
     t_exp = tot[mask]
@@ -52,7 +52,6 @@ def calcular_daphnia_e_gerar_relatorio(
     menor_que_50 = np.any(p_exp <= 0.5)
 
     if not (tem_intermediario and maior_que_50 and menor_que_50):
-        # Média Geométrica em caso de transição direta (0% a 100%)
         c_abaixo = c_exp[p_exp < 0.5]
         c_acima = c_exp[p_exp >= 0.5]
         
@@ -60,21 +59,33 @@ def calcular_daphnia_e_gerar_relatorio(
             c_a = np.max(c_abaixo)
             c_b = np.min(c_acima)
             ec50 = np.sqrt(c_a * c_b)
-            ic_confiavel = False  # Transição abrupta -> Limites não confiáveis
+            ic_confiavel = False
         else:
-            return "ERRO: Não foi possível determinar a EC50."
+            ec50 = np.nan
+            ic_confiavel = False
     else:
         # -------------------------------------------------------------
-        # 3. SPEARMAN-KARBER PURO (TRIM FIXO EM 0%)
+        # 3. SPEARMAN-KARBER PURO (MÉTODO OFICIAL USEPA)
         # -------------------------------------------------------------
         log_c = np.log10(c_exp)
         n_doses = len(c_exp)
         
-        dp = np.diff(np.concatenate(([0.0], p_exp)))
-        log_ec50 = np.sum(dp * log_c)
-        ec50 = 10**log_ec50
+        # Pontos médios dos intervalos (log_X)
+        log_X = np.zeros(n_doses)
+        dist_0 = log_c[1] - log_c[0] if n_doses > 1 else 0.3
+        log_X[0] = log_c[0] - (dist_0 / 2.0)
         
-        # Variância
+        for i in range(1, n_doses):
+            log_X[i] = (log_c[i - 1] + log_c[i]) / 2.0
+
+        # Diferença incremental de mortalidade (dp_i)
+        dp = np.diff(np.concatenate(([0.0], p_exp)))
+        
+        # Estimativa da EC50
+        log_ec50 = np.sum(dp * log_X)
+        ec50 = 10**log_ec50 if not np.isnan(log_ec50) else np.nan
+        
+        # Variância (Fórmula Hamilton / USEPA)
         var_sk = 0.0
         for i in range(n_doses):
             w_i = (p_exp[i] * (1.0 - p_exp[i])) / (t_exp[i] - 1.0 if t_exp[i] > 1.0 else t_exp[i])
@@ -86,8 +97,8 @@ def calcular_daphnia_e_gerar_relatorio(
                 factor = log_c[i + 1] - log_c[i - 1]
             var_sk += ((factor / 2.0) ** 2) * w_i
             
-        # Validação do IC 95%
-        if var_sk > 0 and not np.isnan(var_sk):
+        # Validação do Intervalo de Confiança 95%
+        if var_sk > 0 and not np.isnan(var_sk) and not np.isnan(ec50):
             se_sk = np.sqrt(var_sk)
             li_calc = 10**(log_ec50 - z * se_sk)
             ls_calc = 10**(log_ec50 + z * se_sk)
@@ -102,35 +113,45 @@ def calcular_daphnia_e_gerar_relatorio(
             ic_confiavel = False
 
     # -------------------------------------------------------------
-    # 4. FORMATAÇÃO DO TEXTO DO RELATÓRIO
+    # 4. FORMATAÇÃO DO TEXTO DO RELATÓRIO (ESPAÇAMENTOS E COLUNAS)
     # -------------------------------------------------------------
     linhas_raw = ""
     for c, n, m in zip(concentracoes, totais, mortos):
-        # Formata os decimais conforme o modelo (ex: .78 para 0.78)
-        if 0 < c < 1:
+        if c == 0:
+            c_str = ".00"
+        elif 0 < c < 1:
             c_str = f"{c:.2f}".lstrip('0')
         else:
             c_str = f"{c:.2f}"
         
-        linhas_raw += f"               {c_str:>6}                {int(n):>2}                   {int(m):>2}\n"
+        # Alinhamento das colunas de dados brutos
+        linhas_raw += f"        {c_str:>6}        {int(n):>3}        {int(m):>3}\n"
 
+    # Formatação do bloco final de estimativa
     if ic_confiavel and li_sk is not None and ls_sk is not None:
-        ic_texto = f"95% CONFIDENCE LIMITS\n                                       {li_sk:.2f} TO {ls_sk:.2f}"
+        est_texto = (
+            f"SPEARMAN-KARBER ESTIMATES:   EC50:          {ec50:>7.2f}\n"
+            f"                             95% LOWER CONFIDENCE: {li_sk:>7.2f}\n"
+            f"                             95% UPPER CONFIDENCE: {ls_sk:>7.2f}"
+        )
     else:
-        ic_texto = "95% CONFIDENCE LIMITS\n                                       ARE NOT RELIABLE."
+        ec50_str = "nan" if (ec50 is None or np.isnan(ec50)) else f"{ec50:>7.2f}"
+        est_texto = (
+            f"SPEARMAN-KARBER ESTIMATES:   EC50:          {ec50_str}\n"
+            f"                             95% CONFIDENCE LIMITS\n"
+            f"                             ARE NOT RELIABLE."
+        )
 
-    relatorio = f"""DATE:   {data}               TEST NUMBER: {num_teste}         DURATION:   {duracao} h
-TOXICANT :   {num_teste}
-SPECIES:   {especie}
+    relatorio = f"""DATE:  {data:<10}    TEST NUMBER: {num_teste:<10}    DURATION:  {duracao} h
+TOXICANT : {num_teste}
+SPECIES: {especie}
 
-RAW DATA:   Concentration         Number         Mortalities
---------    ({un})                  Exposed
+RAW DATA:   Concentration     Number     Mortalities
+--------        (%)          Exposed
 {linhas_raw}
+SPEARMAN-KARBER TRIM:              {trim:>5.2f}%
 
-SPEARMAN-KARBER TRIM:                   {trim:.2f}%
-
-SPEARMAN-KARBER ESTIMATES:     EC50:           {ec50:.2f}
-                                       {ic_texto}
+{est_texto}
 --------------------------------------------------------------------------------"""
     
     return relatorio
