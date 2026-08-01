@@ -1,4 +1,6 @@
 import customtkinter as ctk
+from tkcalendar import Calendar
+from telas.daphnia import Daphnia
 
 
 class TelaPrincipal(ctk.CTk):
@@ -41,14 +43,38 @@ class TelaPrincipal(ctk.CTk):
         self.tipo.grid(row=1, column=2, padx=10, sticky="w")
 
         # Botões
-        self.data_button = ctk.CTkButton(self.data_frame, text="📆", width=20)
+        self.data_button = ctk.CTkButton(self.data_frame, text="📆", width=20, command=self.abrir_calendario)
         self.data_button.grid(row=0, column=1, padx=(10,0), sticky="w")
 
         self.prosseguir = ctk.CTkButton(self, text="Prosseguir", command=self.prosseguir)
         self.prosseguir.grid(row=2, column=2, pady=30, padx=10, sticky="w")
 
+    def abrir_calendario(self):
+        self.janela_data = ctk.CTkToplevel(self)
+        self.janela_data.title("Escolha uma data")
+        self.janela_data.geometry("250x250")
+        self.janela_data.grab_set()
+
+        self.calendario = Calendar(
+            self.janela_data,
+            date_pattern="dd/mm/yyyy"
+        )
+        self.calendario.grid(row=0, column=0, sticky="ns")
+        ctk.CTkButton(
+            self.janela_data,
+            text="Selecionar",
+            command=self.selecionar_data
+        ).grid(row=1, column=0, pady=20, padx=20, sticky="ns")
+
+    def selecionar_data(self):
+        data = self.calendario.get_date()
+        self.data.delete(0, "end")
+        self.data.insert(0, data)
+        self.janela_data.destroy()
+
     def prosseguir(self):
-        print(self.data.get(), self.numero.get(), self.tipo.get())
+        if self.tipo.get() == "Daphnia similis":
+            Daphnia(self.data.get(), self.numero.get(), self.tipo.get())
 
 def iniciar_app():
     app = TelaPrincipal()
