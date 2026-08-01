@@ -33,14 +33,14 @@ class TelaPrincipal(ctk.CTk):
         self.data_frame.grid(row=1, column=0, padx=10, sticky="w")
 
         # Entradas
-        self.data = ctk.CTkEntry(self.data_frame, placeholder_text="DD/MM/AAAA")
-        self.data.grid(row=0, column=0, sticky="w")
+        self.data_entry = ctk.CTkEntry(self.data_frame, placeholder_text="DD/MM/AAAA")
+        self.data_entry.grid(row=0, column=0, sticky="w")
 
-        self.numero = ctk.CTkEntry(self)
-        self.numero.grid(row=1, column=1, padx=10, sticky="w")
+        self.numero_entry = ctk.CTkEntry(self)
+        self.numero_entry.grid(row=1, column=1, padx=10, sticky="w")
 
-        self.tipo = ctk.CTkComboBox(self, values=["Daphnia similis", "Ceriodaphnia dubia"])
-        self.tipo.grid(row=1, column=2, padx=10, sticky="w")
+        self.tipo_entry = ctk.CTkComboBox(self, values=["Daphnia similis", "Ceriodaphnia dubia"])
+        self.tipo_entry.grid(row=1, column=2, padx=10, sticky="w")
 
         # Botões
         self.data_button = ctk.CTkButton(self.data_frame, text="📆", width=20, command=self.abrir_calendario)
@@ -68,13 +68,13 @@ class TelaPrincipal(ctk.CTk):
 
     def selecionar_data(self):
         data = self.calendario.get_date()
-        self.data.delete(0, "end")
-        self.data.insert(0, data)
+        self.data_entry.delete(0, "end")
+        self.data_entry.insert(0, data)
         self.janela_data.destroy()
 
     def prosseguir(self):
-        if self.tipo.get() == "Daphnia similis":
-            Daphnia(self.data.get(), self.numero.get(), self.tipo.get())
+        if self.tipo_entry.get() == "Daphnia similis":
+            Daphnia(self.data_entry.get(), self.numero_entry.get(), self.tipo_entry.get())
 
 def iniciar_app():
     app = TelaPrincipal()

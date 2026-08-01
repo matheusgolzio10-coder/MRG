@@ -11,7 +11,7 @@ class Daphnia(ctk.CTkToplevel):
 
         # Configurações da janela
         self.title("Daphnia similis")
-        self.geometry("600x400")
+        self.geometry("700x450")
         self.grab_set()
 
         ctk.set_appearance_mode("Dark")
@@ -34,3 +34,49 @@ class Daphnia(ctk.CTkToplevel):
         ctk.CTkLabel(self, text=self.numero, font=("Arial", 20), text_color="red").grid(row=1, column=1, padx=10, pady=5, sticky="w")
         ctk.CTkLabel(self, text=self.tipo, font=("Arial", 20), text_color="red").grid(row=1, column=2, padx=10, pady=5, sticky="w")
 
+        # Frame para o controle
+        self.controle_frame = ctk.CTkFrame(self, fg_color="transparent", border_color="white", border_width=1)
+        self.controle_frame.grid(row=3, column=0, padx=10, pady=10, sticky="nw")
+
+        # Labels do controle
+        ctk.CTkLabel(self.controle_frame, text="CONTROLE", font=("Arial", 15, "bold")).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(self.controle_frame, text="TOTAL", font=("Arial", 13)).grid(row=1, column=1, padx=10, sticky="w")
+        ctk.CTkLabel(self.controle_frame, text="MORTOS", font=("Arial", 13)).grid(row=1, column=0, padx=10, sticky="w")
+
+        # Entradas do controle
+        self.controle_total = ctk.CTkTextbox(self.controle_frame, fg_color="grey", height=20, width=50, corner_radius=0)
+        self.controle_total.grid(row=2, column=1, padx=10, pady=10, sticky="w")
+
+        self.controle_mortos = ctk.CTkTextbox(self.controle_frame, fg_color="grey", height=20, width=100, corner_radius=0)
+        self.controle_mortos.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+
+        # Frame para amostra
+        self.amostra_frame = ctk.CTkFrame(self, fg_color="transparent", border_color="white", border_width=1)
+        self.amostra_frame.grid(row=3, column=1, columnspan=2, padx=10, pady=10, sticky="ew")
+
+        # Labels da amostra
+        ctk.CTkLabel(self.amostra_frame, text="AMOSTRA", font=("Arial", 15, "bold")).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        ctk.CTkLabel(self.amostra_frame, text="CONCENTRAÇÕES", font=("Arial", 13)).grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        ctk.CTkLabel(self.amostra_frame, text="MORTOS", font=("Arial", 13)).grid(row=1, column=1, padx=10, pady=10, sticky="w")
+        ctk.CTkLabel(self.amostra_frame, text="TOTAL", font=("Arial", 13)).grid(row=1, column=2, padx=10, pady=10, sticky="w")
+        ctk.CTkLabel(self.amostra_frame, text="UNIDADE", font=("Arial", 13)).grid(row=1, column=3, padx=10, pady=10, sticky="w")
+
+        # Entradas da amostra
+        self.amostra_conc = ctk.CTkTextbox(self.amostra_frame, fg_color="grey", corner_radius=0, width=120)
+        self.amostra_conc.grid(row=2, column=0, padx=10, pady=10, sticky="w")
+
+        self.amostra_mortos = ctk.CTkTextbox(self.amostra_frame, fg_color="grey", corner_radius=0, width=120)
+        self.amostra_mortos.grid(row=2, column=1, padx=10, pady=10, sticky="w")
+
+        self.amostra_total = ctk.CTkTextbox(self.amostra_frame, fg_color="grey", corner_radius=0, width=50)
+        self.amostra_total.grid(row=2, column=2, padx=10, pady=10, sticky="w")
+
+        self.unidade = ctk.CTkComboBox(self.amostra_frame, values=["%", "mg/L"], width=100)
+        self.unidade.grid(row=2, column=3, padx=10, pady=10, sticky="n")
+
+        # Calcular
+        self.calcular_button = ctk.CTkButton(self, text="Calcular", command=self.calcular)
+        self.calcular_button.grid(row=4, column=2, padx=10, pady=10, sticky="e")
+
+    def calcular(self):
+        print("Calcular")
