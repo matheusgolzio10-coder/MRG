@@ -9,14 +9,31 @@ def calcular_daphnia_e_gerar_relatorio(
     un,
     num_teste, 
     duracao=48, 
-    especie="D.similis",
+    especie="Daphnia similis",
     trim=0.0, 
     alfa=0.05,
+    estimado="e",
+    un_duracao="h",
+    trim_auto="y"
 ):
     """
-    Calcula a EC50 via Spearman-Karber Clássico (USEPA / Trim 0%) 
-    e gera o relatório formatado com alinhamento visual preciso.
+    Calcula a EC50/LC50 via Spearman-Karber Clássico (USEPA).
+    - Se calculável: gera o relatório padrão de saída.
+    - Se NÃO calculável: gera o log do terminal interativo MS-DOS (modelo USEPA original).
     """
+    # -------------------------------------------------------------
+    # 0. VALIDAÇÃO DOS TAMANHOS DOS ARRAYS
+    # -------------------------------------------------------------
+    len_conc = len(concentracoes)
+    len_tot = len(totais)
+    len_mort = len(mortos)
+
+    if not (len_conc == len_tot == len_mort):
+        return (
+            f"ERRO DE DADOS: O número de elementos nas listas não coincide!\n"
+            f"- Concentrações: {len_conc} | Totais: {len_tot} | Mortalidades: {len_mort}"
+        )
+
     conc = np.array(concentracoes, dtype=float)
     tot = np.array(totais, dtype=float)
     mort = np.array(mortos, dtype=float)
@@ -32,24 +49,37 @@ def calcular_daphnia_e_gerar_relatorio(
     if mortalidade_controle > 0.10:
         return f"ERRO: Ensaio Inválido. Mortalidade no controle ({mortalidade_controle*100:.1f}%) excedeu 10%."
 
-    # Separa apenas as concentrações expostas (> 0) para evitar log(0)
+    # Separa apenas as concentrações expostas (> 0)
     mask = conc > 0
     c_exp = conc[mask]
     t_exp = tot[mask]
     m_exp = mort[mask]
     p_exp = m_exp / t_exp
-    
-    ec50 = None
-    li_sk = None
-    ls_sk = None
-    ic_confiavel = False
+
+    total_mortes_expostas = np.sum(m_exp)
+    total_organismos_expostos = np.sum(t_exp)
 
     # -------------------------------------------------------------
-    # 2. VERIFICAÇÃO DE TRANSIÇÃO ABRUPTA OU SEM RESPOSTA PARCIAL
+    # 2. SE NÃO FOR CALCULÁVEL: GERA LOG INTERATIVO (MODELO IMAGEM)
+    # -------------------------------------------------------------
+    # Se todas as mortalidades forem 0 ou todas 100%, gera o fluxo do terminal
+    if total_mortes_expostas == 0 or total_mortes_expostas == total_organismos_expostos:
+        return _gerar_log_terminal_incalculavel(
+            data, num_teste, especie, un, duracao, 
+            concentracoes, totais, mortos, estimado, un_duracao, trim_auto
+        )
+
+    # -------------------------------------------------------------
+    # 3. VERIFICAÇÃO DE TRANSIÇÃO ABRUPTA OU RESPOSTA PARCIAL
     # -------------------------------------------------------------
     tem_intermediario = np.any((p_exp > 0) & (p_exp < 1.0))
     maior_que_50 = np.any(p_exp >= 0.5)
     menor_que_50 = np.any(p_exp <= 0.5)
+
+    ec50 = None
+    li_sk = None
+    ls_sk = None
+    ic_confiavel = False
 
     if not (tem_intermediario and maior_que_50 and menor_que_50):
         c_abaixo = c_exp[p_exp < 0.5]
@@ -61,16 +91,17 @@ def calcular_daphnia_e_gerar_relatorio(
             ec50 = np.sqrt(c_a * c_b)
             ic_confiavel = False
         else:
-            ec50 = np.nan
-            ic_confiavel = False
+            return _gerar_log_terminal_incalculavel(
+                data, num_teste, especie, un, duracao, 
+                concentracoes, totais, mortos, estimado, un_duracao, trim_auto
+            )
     else:
         # -------------------------------------------------------------
-        # 3. SPEARMAN-KARBER PURO (MÉTODO OFICIAL USEPA)
+        # 4. SPEARMAN-KARBER PURO (MÉTODO OFICIAL USEPA)
         # -------------------------------------------------------------
         log_c = np.log10(c_exp)
         n_doses = len(c_exp)
         
-        # Pontos médios dos intervalos (log_X)
         log_X = np.zeros(n_doses)
         dist_0 = log_c[1] - log_c[0] if n_doses > 1 else 0.3
         log_X[0] = log_c[0] - (dist_0 / 2.0)
@@ -78,14 +109,10 @@ def calcular_daphnia_e_gerar_relatorio(
         for i in range(1, n_doses):
             log_X[i] = (log_c[i - 1] + log_c[i]) / 2.0
 
-        # Diferença incremental de mortalidade (dp_i)
         dp = np.diff(np.concatenate(([0.0], p_exp)))
-        
-        # Estimativa da EC50
         log_ec50 = np.sum(dp * log_X)
         ec50 = 10**log_ec50 if not np.isnan(log_ec50) else np.nan
         
-        # Variância (Fórmula Hamilton / USEPA)
         var_sk = 0.0
         for i in range(n_doses):
             w_i = (p_exp[i] * (1.0 - p_exp[i])) / (t_exp[i] - 1.0 if t_exp[i] > 1.0 else t_exp[i])
@@ -97,7 +124,6 @@ def calcular_daphnia_e_gerar_relatorio(
                 factor = log_c[i + 1] - log_c[i - 1]
             var_sk += ((factor / 2.0) ** 2) * w_i
             
-        # Validação do Intervalo de Confiança 95%
         if var_sk > 0 and not np.isnan(var_sk) and not np.isnan(ec50):
             se_sk = np.sqrt(var_sk)
             li_calc = 10**(log_ec50 - z * se_sk)
@@ -107,13 +133,9 @@ def calcular_daphnia_e_gerar_relatorio(
                 li_sk = li_calc
                 ls_sk = ls_calc
                 ic_confiavel = True
-            else:
-                ic_confiavel = False
-        else:
-            ic_confiavel = False
 
     # -------------------------------------------------------------
-    # 4. FORMATAÇÃO DO TEXTO DO RELATÓRIO (ESPAÇAMENTOS E COLUNAS)
+    # 5. FORMATAÇÃO DO RELATÓRIO PADRÃO (CASO SEJA CALCULÁVEL)
     # -------------------------------------------------------------
     linhas_raw = ""
     for c, n, m in zip(concentracoes, totais, mortos):
@@ -124,22 +146,22 @@ def calcular_daphnia_e_gerar_relatorio(
         else:
             c_str = f"{c:.2f}"
         
-        # Alinhamento das colunas de dados brutos
-        linhas_raw += f"        {c_str:>6}        {int(n):>3}        {int(m):>3}\n"
+        linhas_raw += f"                                   {c_str:>6}                        {int(n):>3}            {int(m):>3}\n"
 
-    # Formatação do bloco final de estimativa
+    sigla = "LC50" if estimado.lower() == "l" else "EC50"
+
     if ic_confiavel and li_sk is not None and ls_sk is not None:
         est_texto = (
-            f"SPEARMAN-KARBER ESTIMATES:   EC50:          {ec50:>7.2f}\n"
-            f"                             95% LOWER CONFIDENCE: {li_sk:>7.2f}\n"
-            f"                             95% UPPER CONFIDENCE: {ls_sk:>7.2f}"
+            f"SPEARMAN-KARBER ESTIMATES:   {sigla}:          {ec50:>7.2f}\n"
+            f"                                                                                     95% LOWER CONFIDENCE: {li_sk:>7.2f}\n"
+            f"                                                                                     95% UPPER CONFIDENCE: {ls_sk:>7.2f}"
         )
     else:
         ec50_str = "nan" if (ec50 is None or np.isnan(ec50)) else f"{ec50:>7.2f}"
         est_texto = (
-            f"SPEARMAN-KARBER ESTIMATES:   EC50:          {ec50_str}\n"
-            f"                             95% CONFIDENCE LIMITS\n"
-            f"                             ARE NOT RELIABLE."
+            f"SPEARMAN-KARBER ESTIMATES:   {sigla}:          {ec50_str}\n"
+            f"                                                                                     95% CONFIDENCE LIMITS\n"
+            f"                                                                                     ARE NOT RELIABLE."
         )
 
     relatorio = f"""DATE:  {data:<10}    TEST NUMBER: {num_teste:<10}    DURATION:  {duracao} h
@@ -147,7 +169,7 @@ TOXICANT : {num_teste}
 SPECIES: {especie}
 
 RAW DATA:   Concentration     Number     Mortalities
---------        (%)          Exposed
+--------               ({un})                         Exposed
 {linhas_raw}
 SPEARMAN-KARBER TRIM:              {trim:>5.2f}%
 
@@ -155,3 +177,62 @@ SPEARMAN-KARBER TRIM:              {trim:>5.2f}%
 --------------------------------------------------------------------------------"""
     
     return relatorio
+
+
+def _gerar_log_terminal_incalculavel(
+    data, num_teste, especie, unidade, duracao, 
+    concentracoes, totais, mortos, estimado="e", un_duracao="h", trim_auto="y"
+):
+    """
+    Função auxiliar que formata os dados no layout exato de entrada do terminal USEPA.
+    """
+    ctrl_tot = int(totais[0])
+    ctrl_mort = int(mortos[0])
+    
+    doses = concentracoes[1:]
+    tot_doses = totais[1:]
+    mort_doses = mortos[1:]
+    num_doses = len(doses)
+    
+    str_doses = "\n".join([f"{d:g}" if d >= 1 else f"{d}" for d in doses])
+    str_mortes = "\n".join([f"{int(m)}" for m in mort_doses])
+    
+    return f"""ENTER DATE OF TEST: 
+{data}
+ENTER TEST NUMBER: 
+{num_teste}
+WHAT IS TO BE ESTIMATED? 
+(ENTER "L" FOR LC50 AND "E" FOR EC50) 
+{estimado.lower()}
+ENTER TEST SPECIES NAME: 
+{especie}
+ENTER TOXICANT  NAME: 
+{num_teste}
+ENTER UNITS FOR EXPOSURE CONCENTRATION OF TOXICANT : 
+{unidade}
+ENTER THE NUMBER OF INDIVIDUALS IN THE CONTROL: 
+{ctrl_tot}
+ENTER THE NUMBER OF MORTALITIES IN THE CONTROL: 
+{ctrl_mort}
+ENTER THE NUMBER OF CONCENTRATIONS 
+(NOT INCLUDING THE CONTROL;  MAX = 10): 
+{num_doses}
+ENTER THE  {num_doses} EXPOSURE CONCENTRATIONS (IN INCREASING ORDER): 
+
+{str_doses}
+ARE THE NUMBER OF INDIVIDUALS AT EACH EXPOSURE CONCENTRATION EQUAL (Y/N) ? 
+{trim_auto.lower()}
+ENTER THE NUMBER OF INDIVIDUALS AT EACH EXPOSURE CONCENTRATION: 
+{int(tot_doses[0])}
+ENTER UNITS FOR DURATION OF EXPERIMENT 
+(ENTER "H" FOR HOURS, "D" FOR DAYS, ETC.): 
+{un_duracao.lower()}
+ENTER DURATION OF TEST: 
+{duracao}
+ENTER THE NUMBER OF MORTALITIES AT EACH EXPOSURE CONCENTRATION: 
+
+{str_mortes}
+WOULD YOU LIKE THE AUTOMATIC TRIM CALCULATION(Y/N) ? 
+{trim_auto.lower()}
+
+ MINIMUM REQUIRED TRIM IS TOO LARGE: 100.0,SO SK IS NOT CALCULABLE."""
