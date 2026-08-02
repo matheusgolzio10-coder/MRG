@@ -115,7 +115,7 @@ class Daphnia(ctk.CTkToplevel):
 
         self.resultado_tela.geometry("600x500")
 
-        self.textbox_resultado = ctk.CTkTextbox(self.resultado_tela, fg_color="grey", corner_radius=0)
+        self.textbox_resultado = ctk.CTkTextbox(self.resultado_tela, fg_color="grey", corner_radius=0, font=("Courier New", 10))
         self.textbox_resultado.pack(fill="both", expand=True)
 
         self.textbox_resultado.insert("1.0", calcular_daphnia_e_gerar_relatorio(
